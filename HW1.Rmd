@@ -2,7 +2,7 @@
 title: "HW1"
 author: "Zhaohua Chunyu"
 date: "2023-02-13"
-output: html_document
+output: pdf_document
 ---
 
 ```{r setup, include=FALSE}
@@ -11,7 +11,6 @@ library(caret)
 library(plotmo)
 library(tidyverse)
 library(pls)
-library(dplyr)
 ```
 
 In this exercise, we predict the sale price of a house using its other characteristics.
@@ -118,7 +117,7 @@ mse.lasso.caret.1se = mean((ytest - pred.lasso.caret.1se)^2)
 mse.lasso.caret.1se
 ```
 
-We can also fit Lasso model using the `caret` package. The best tuning parameter for the minumum MSE rule is `r lasso.caret.min$bestTune$lambda` and the test error is `r mse.lasso.caret.min`. If we want to use the 1se rule, we can define a new resampling method `ctrl2` that specifies `selectionFunction = "oneSE"`. With the 1se rule, there are 36 predictors included in the model. 
+We can also fit Lasso model using the `caret` package. The best tuning parameter for the minumum MSE rule is lambda = `r lasso.caret.1se$bestTune$lambda` and the test error is `r `mse.lasso.caret.min`. If we want to use the 1se rule, we can define a new resampling method `ctrl2` that specifies `selectionFunction = "oneSE"`. With the 1se rule, there are 36 predictors included in the model. 
 
 ## elastic net
 ```{r}
@@ -128,10 +127,10 @@ enet.fit <- train(xtrain, ytrain,
                   tuneGrid = expand.grid(alpha = seq(0, 1, length = 21), 
                                          lambda = exp(seq(7,-1, length = 200))),
                   trControl = ctrl1)
-enet.fit$bestTune
-enet.fit$bestTune
+enet.fit$bestTune$alpha
+enet.fit$bestTune$lambda
 
-myCol= rainbow(40)
+myCol= rainbow(25)
 myPar = list(superpose.symbol = list(col = myCol),
                     superpose.line = list(col = myCol))
 
