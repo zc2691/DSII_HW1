@@ -127,10 +127,9 @@ enet.fit <- train(xtrain, ytrain,
                   tuneGrid = expand.grid(alpha = seq(0, 1, length = 21), 
                                          lambda = exp(seq(7,-1, length = 200))),
                   trControl = ctrl1)
-enet.fit$bestTune$alpha
-enet.fit$bestTune$lambda
+enet.fit$bestTune
 
-myCol= rainbow(25)
+myCol= rainbow(40)
 myPar = list(superpose.symbol = list(col = myCol),
                     superpose.line = list(col = myCol))
 
