@@ -1,0 +1,194 @@
+---
+title: "HW1"
+author: "Zhaohua Chunyu"
+date: "2023-02-13"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+library(glmnet)
+library(caret)
+library(plotmo)
+library(tidyverse)
+library(pls)
+library(dplyr)
+```
+
+In this exercise, we predict the sale price of a house using its other characteristics.
+
+```{r}
+train = read_csv("/Users/zozochunyu/Documents/DSII/HW/DSII_HW1/housing_training.csv") %>% 
+  janitor::clean_names()
+test = read_csv("/Users/zozochunyu/Documents/DSII/HW/DSII_HW1/housing_training.csv") %>% 
+  janitor::clean_names()
+# delete rows containing the missing data
+train = na.omit(train)
+test = na.omit(test)
+
+xtrain = model.matrix(sale_price ~ ., train)[,-1]
+ytrain = train$sale_price
+
+xtest = model.matrix(sale_price ~ ., test)[,-1]
+ytest = test$sale_price
+
+ctrl1 = trainControl(method = "repeatedcv", number = 10, repeats = 5)
+```
+
+
+## Least squares 
+```{r warning=FALSE}
+set.seed(2023)
+lm.fit <- train(xtrain,ytrain,
+                method = "lm",
+                trControl = ctrl1)
+pred.lm = predict(lm.fit, newx = xtest)
+mse.lm = mean((ytest-pred.lm)^2)
+mse.lm
+```
+
+When fitting a least squares model, the test error is `r mse.lm`. 
+
+## LASSO
+```{r}
+set.seed(2023)
+cv.lasso = cv.glmnet(xtrain, ytrain, 
+                      standardize = TRUE,
+                      alpha = 1, 
+                      lambda = exp(seq(8, 2, length = 1000)))
+plot(cv.lasso)
+abline(h = (cv.lasso$cvm + cv.lasso$cvsd)[which.min(cv.lasso$cvm)], col = 4, lwd = 2)
+# cv.lasso$glmnet.fit is a fitted glmnet object using the full training data
+# plot(cv.lasso$glmnet.fit, xvar = "lambda", label=TRUE)
+plot_glmnet(x = cv.lasso$glmnet.fit)
+
+
+cv.lasso$lambda.min
+cv.lasso$lambda.1se
+
+
+lasso.fit.min = predict(cv.lasso, s = "lambda.min", type = "coefficients") ;  lasso.fit.min
+lasso.fit.1se = predict(cv.lasso, s = "lambda.1se", type = "coefficients") ; lasso.fit.1se
+
+pred.lasso.min = predict(cv.lasso, s = "lambda.min", newx = xtest)
+mse.lasso.min = mean((ytest - pred.lasso.min)^2)
+mse.lasso.min
+pred.lasso.1se = predict(cv.lasso, s = "lambda.1se", newx = xtest)
+mse.lasso.1se = mean((ytest - pred.lasso.1se)^2)
+mse.lasso.1se
+```
+
+When fitting a Lasso model, the best tuning parameter for the minimum MSE rule is `r cv.lasso$lambda.min` and the test error is `r mse.lasso.min`. When the 1SE rule is applied, 29 predictors besides the intercept are included in the model.
+
+## LASSO by `caret`
+```{r}
+set.seed(2023)
+lasso.caret.min <- train(xtrain, ytrain,
+                   method = "glmnet",
+                   tuneGrid = expand.grid(alpha = 1, 
+                                          lambda = exp(seq(8, 2, length=1000))),
+                   trControl = ctrl1)
+plot(lasso.caret.min, xTrans = log)
+
+lasso.caret.min$bestTune
+
+coef(lasso.caret.min$finalModel, lasso.caret.min$bestTune$lambda)
+
+pred.lasso.caret.min = predict(lasso.caret.min, s = lasso.caret.min$bestTune, newx = xtest)
+mse.lasso.caret.min = mean((ytest - pred.lasso.caret.min)^2)
+mse.lasso.caret.min
+
+```
+
+```{r}
+ctrl2 = trainControl(method = "repeatedcv", number = 10, repeats = 5, selectionFunction = "oneSE")
+set.seed(2023)
+lasso.caret.1se <- train(xtrain, ytrain,
+                   method = "glmnet",
+                   tuneGrid = expand.grid(alpha = 1, 
+                                          lambda = exp(seq(8, 2, length=1000))),
+                   trControl = ctrl2)
+plot(lasso.caret.1se, xTrans = log)
+
+lasso.caret.1se$bestTune
+
+coef(lasso.caret.1se$finalModel, lasso.caret.1se$bestTune$lambda)
+
+pred.lasso.caret.1se = predict(lasso.caret.1se, s = lasso.caret.1se$bestTune, newx = xtest)
+mse.lasso.caret.1se = mean((ytest - pred.lasso.caret.1se)^2)
+mse.lasso.caret.1se
+```
+
+We can also fit Lasso model using the `caret` package. The best tuning parameter for the minumum MSE rule is `r lasso.caret.min$bestTune$lambda` and the test error is `r mse.lasso.caret.min`. If we want to use the 1se rule, we can define a new resampling method `ctrl2` that specifies `selectionFunction = "oneSE"`. With the 1se rule, there are 36 predictors included in the model. 
+
+## elastic net
+```{r}
+set.seed(2023)
+enet.fit <- train(xtrain, ytrain,
+                  method = "glmnet",
+                  tuneGrid = expand.grid(alpha = seq(0, 1, length = 21), 
+                                         lambda = exp(seq(7,-1, length = 200))),
+                  trControl = ctrl1)
+enet.fit$bestTune
+enet.fit$bestTune
+
+myCol= rainbow(40)
+myPar = list(superpose.symbol = list(col = myCol),
+                    superpose.line = list(col = myCol))
+
+plot(enet.fit, par.settings = myPar)
+
+pred.enet = predict(enet.fit, s = enet.fit$bestTune, newx = xtest)
+mse.enet = mean((ytest - pred.enet)^2)
+mse.enet
+```
+
+When fitting a elastic net model, the selected tuning parameter for the minumum MSE rule is alpha = `r enet.fit$bestTune$alpha` and lambda = `r enet.fit$bestTune$lambda`. It is possible to apply the 1SE rule to select the tuning parameters by using the resampling method of `ctrl2` where `selectionFunction = "oneSE"` is specified. 
+
+## partial least squares by `pls`
+```{r}
+set.seed(2023)
+pls.fit = plsr(sale_price~.,
+               data = train, 
+               scale = TRUE, 
+               validation = "CV")
+summary(pls.fit)
+
+validationplot(pls.fit, val.type="MSEP", legendpos = "topright")
+
+cv.mse = RMSEP(pls.fit)
+ncomp.cv = which.min(cv.mse$val[1,,])-1
+ncomp.cv
+
+pred.pls = predict(pls.fit, newdata = xtest, ncomp = ncomp.cv)
+mse.pls = mean((ytest - pred.pls)^2)
+mse.pls
+```
+When fitting a partial least squares model using `pls`, the test error is `r mse.pls`. There are `r ncomp.cv` components included in the model. 
+
+## partial least squares by `caret`
+```{r}
+set.seed(2023)
+pls.fit.caret = train(xtrain, ytrain,
+                method = "pls",
+                tuneGrid = data.frame(ncomp = 1:39),
+                trControl = ctrl1,
+                preProcess = c("center", "scale"))
+pls.fit.caret$bestTune
+pred.pls.caret = predict(pls.fit.caret, newdata = xtest)
+mse.pls.caret = mean((ytest - pred.pls.caret)^2)
+mse.pls.caret
+
+ggplot(pls.fit.caret, highlight = TRUE) + theme_bw()
+```
+We can also use `caret` package to fit a partial least sqaures model. We see that the number of components included in the model is different from what we got using `pls`. 
+
+## Comparing methods
+```{r}
+resamp = resamples(list(lm = lm.fit, lasso.1se = lasso.caret.1se, enet = enet.fit, pls = pls.fit.caret))
+summary(resamp)
+
+parallelplot(resamp, metric = "RMSE")
+bwplot(resamp, metric = "RMSE")
+```
+
+By comparing across all models built, I would select elastic net for predicting the response because it has the smallest RMSE and MSE values. The adjusted R squares is also the second highest in the four models. 
